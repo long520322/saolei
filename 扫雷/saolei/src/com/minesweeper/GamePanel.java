@@ -37,14 +37,16 @@ public class GamePanel extends JPanel {
     private JPanel gameBoardPanel;
     private JButton easyBtn, mediumBtn, hardBtn;
     private JButton resetButton;
+    private JPanel boardPanel; // 保存游戏面板的引用
 
     public GamePanel() {
         setLayout(new BorderLayout());
+        setBackground(new Color(240, 240, 240));
 
-        // 顶部面板
+        // 顶部面板 - 增加高度和间距
         JPanel topPanel = new JPanel();
-        topPanel.setLayout(new FlowLayout());
-        topPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        topPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 15, 12));
+        topPanel.setBorder(BorderFactory.createEmptyBorder(15, 10, 15, 10));
         topPanel.setBackground(new Color(240, 240, 240));
 
         statusLabel = new JLabel("游戏进行中");
@@ -55,128 +57,103 @@ public class GamePanel extends JPanel {
 
         resetButton = new JButton("新游戏");
         resetButton.setFont(new Font("Microsoft YaHei", Font.BOLD, 14));
-        resetButton.setPreferredSize(new Dimension(100, 40));
+        resetButton.setPreferredSize(new Dimension(100, 38));
+        resetButton.setFocusPainted(false);
         resetButton.addActionListener(e -> resetGame());
 
         // 难度选择按钮
-        easyBtn = new JButton("简单 (9x9)");
+        easyBtn = new JButton("简单 9x9");
         easyBtn.setFont(new Font("Microsoft YaHei", Font.BOLD, 12));
-        easyBtn.setPreferredSize(new Dimension(90, 35));
+        easyBtn.setPreferredSize(new Dimension(85, 35));
         easyBtn.setBackground(new Color(200, 230, 200));
+        easyBtn.setFocusPainted(false);
         easyBtn.addActionListener(e -> setDifficulty(EASY_ROWS, EASY_COLS, EASY_MINES));
 
-        mediumBtn = new JButton("中等 (16x16)");
+        mediumBtn = new JButton("中等 16x16");
         mediumBtn.setFont(new Font("Microsoft YaHei", Font.BOLD, 12));
-        mediumBtn.setPreferredSize(new Dimension(100, 35));
+        mediumBtn.setPreferredSize(new Dimension(95, 35));
         mediumBtn.setBackground(new Color(230, 230, 180));
+        mediumBtn.setFocusPainted(false);
         mediumBtn.addActionListener(e -> setDifficulty(MEDIUM_ROWS, MEDIUM_COLS, MEDIUM_MINES));
 
-        hardBtn = new JButton("困难 (16x30)");
+        hardBtn = new JButton("困难 16x30");
         hardBtn.setFont(new Font("Microsoft YaHei", Font.BOLD, 12));
-        hardBtn.setPreferredSize(new Dimension(100, 35));
+        hardBtn.setPreferredSize(new Dimension(95, 35));
         hardBtn.setBackground(new Color(230, 200, 200));
+        hardBtn.setFocusPainted(false);
         hardBtn.addActionListener(e -> setDifficulty(HARD_ROWS, HARD_COLS, HARD_MINES));
 
+        // 添加组件到顶部面板
         topPanel.add(statusLabel);
-        topPanel.add(Box.createHorizontalStrut(10));
         topPanel.add(resetButton);
-        topPanel.add(Box.createHorizontalStrut(10));
         topPanel.add(easyBtn);
         topPanel.add(mediumBtn);
         topPanel.add(hardBtn);
-        topPanel.add(Box.createHorizontalStrut(10));
         topPanel.add(minesLabel);
 
         add(topPanel, BorderLayout.NORTH);
 
-        // 游戏面板容器
+        // 游戏面板容器 - 添加边框和间距
         gameBoardPanel = new JPanel();
+        gameBoardPanel.setLayout(new BorderLayout());
+        gameBoardPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        gameBoardPanel.setBackground(new Color(240, 240, 240));
         add(gameBoardPanel, BorderLayout.CENTER);
 
-        // 初始化游戏（不在这里调整窗口大小）
-        initGameBoardWithoutResize();
-
-        // 初始化游戏逻辑
+        // 初始化游戏
+        createGameBoard();
         initGame();
-    }
 
-    private void initGameBoardWithoutResize() {
-        // 清除旧的面板
-        gameBoardPanel.removeAll();
-
-        // 根据难度调整格子大小
-        adjustTileSize();
-
-        // 创建新的游戏面板
-        JPanel boardPanel = new JPanel(new GridLayout(currentRows, currentCols));
-        int boardWidth = currentCols * tileSize;
-        int boardHeight = currentRows * tileSize;
-        boardPanel.setPreferredSize(new Dimension(boardWidth, boardHeight));
-        boardPanel.setBackground(Color.DARK_GRAY);
-        boardPanel.setBorder(BorderFactory.createLineBorder(Color.GRAY, 2));
-
-        board = new Tile[currentRows][currentCols];
-
-        for (int i = 0; i < currentRows; i++) {
-            for (int j = 0; j < currentCols; j++) {
-                board[i][j] = new Tile(i, j);
-                board[i][j].setPreferredSize(new Dimension(tileSize, tileSize));
-                board[i][j].setFont(new Font("Segoe UI", Font.BOLD, Math.max(16, tileSize / 2)));
-                board[i][j].addActionListener(new TileClickListener(i, j));
-                board[i][j].addMouseListener(new TileMouseListener(i, j));
-                boardPanel.add(board[i][j]);
-            }
-        }
-
-        gameBoardPanel.add(boardPanel);
-
-        // 重新验证和绘制
-        gameBoardPanel.revalidate();
-        gameBoardPanel.repaint();
-    }
-
-    private void initGameBoard() {
-        // 清除旧的面板
-        gameBoardPanel.removeAll();
-
-        // 根据难度调整格子大小
-        adjustTileSize();
-
-        // 创建新的游戏面板
-        JPanel boardPanel = new JPanel(new GridLayout(currentRows, currentCols));
-        int boardWidth = currentCols * tileSize;
-        int boardHeight = currentRows * tileSize;
-        boardPanel.setPreferredSize(new Dimension(boardWidth, boardHeight));
-        boardPanel.setBackground(Color.DARK_GRAY);
-        boardPanel.setBorder(BorderFactory.createLineBorder(Color.GRAY, 2));
-
-        board = new Tile[currentRows][currentCols];
-
-        for (int i = 0; i < currentRows; i++) {
-            for (int j = 0; j < currentCols; j++) {
-                board[i][j] = new Tile(i, j);
-                board[i][j].setPreferredSize(new Dimension(tileSize, tileSize));
-                board[i][j].setFont(new Font("Segoe UI", Font.BOLD, Math.max(16, tileSize / 2)));
-                board[i][j].addActionListener(new TileClickListener(i, j));
-                board[i][j].addMouseListener(new TileMouseListener(i, j));
-                boardPanel.add(board[i][j]);
-            }
-        }
-
-        gameBoardPanel.add(boardPanel);
-
-        // 重新验证和绘制
-        gameBoardPanel.revalidate();
-        gameBoardPanel.repaint();
-
-        // 调整主窗口大小 - 添加安全检查
+        // 强制刷新显示
         SwingUtilities.invokeLater(() -> {
-            java.awt.Window window = SwingUtilities.getWindowAncestor(this);
-            if (window != null) {
-                window.pack();
-                window.setLocationRelativeTo(null);
-            }
+            revalidate();
+            repaint();
         });
+    }
+
+    private void createGameBoard() {
+        // 清除旧的面板
+        gameBoardPanel.removeAll();
+
+        // 根据难度调整格子大小
+        adjustTileSize();
+
+        // 创建居中对齐的容器
+        JPanel centerPanel = new JPanel(new GridBagLayout());
+        centerPanel.setBackground(new Color(240, 240, 240));
+
+        // 创建游戏面板
+        boardPanel = new JPanel(new GridLayout(currentRows, currentCols));
+        int boardWidth = currentCols * tileSize;
+        int boardHeight = currentRows * tileSize;
+        boardPanel.setPreferredSize(new Dimension(boardWidth, boardHeight));
+        boardPanel.setMaximumSize(new Dimension(boardWidth, boardHeight));
+        boardPanel.setBackground(Color.DARK_GRAY);
+        boardPanel.setBorder(BorderFactory.createLineBorder(Color.GRAY, 2));
+
+        board = new Tile[currentRows][currentCols];
+
+        for (int i = 0; i < currentRows; i++) {
+            for (int j = 0; j < currentCols; j++) {
+                board[i][j] = new Tile(i, j);
+                board[i][j].setPreferredSize(new Dimension(tileSize, tileSize));
+                board[i][j].setFont(new Font("Segoe UI", Font.BOLD, Math.max(16, tileSize / 2)));
+                board[i][j].addActionListener(new TileClickListener(i, j));
+                board[i][j].addMouseListener(new TileMouseListener(i, j));
+                boardPanel.add(board[i][j]);
+            }
+        }
+
+        centerPanel.add(boardPanel);
+        gameBoardPanel.add(centerPanel, BorderLayout.CENTER);
+
+        // 强制刷新
+        boardPanel.revalidate();
+        boardPanel.repaint();
+        centerPanel.revalidate();
+        centerPanel.repaint();
+        gameBoardPanel.revalidate();
+        gameBoardPanel.repaint();
     }
 
     private void adjustTileSize() {
@@ -198,11 +175,27 @@ public class GamePanel extends JPanel {
         // 更新按钮样式
         updateDifficultyButtonStyle();
 
-        // 重新初始化游戏板
-        initGameBoard();
+        // 重新创建游戏板
+        createGameBoard();
 
-        // 重置游戏
-        resetGame();
+        // 重置游戏状态
+        resetGameState();
+
+        // 初始化游戏逻辑
+        initGame();
+
+        // 强制刷新显示
+        SwingUtilities.invokeLater(() -> {
+            revalidate();
+            repaint();
+            // 调整窗口大小
+            Window window = SwingUtilities.getWindowAncestor(this);
+            if (window != null) {
+                window.pack();
+                window.setLocationRelativeTo(null);
+                window.setMinimumSize(window.getSize());
+            }
+        });
     }
 
     private void updateDifficultyButtonStyle() {
@@ -231,7 +224,7 @@ public class GamePanel extends JPanel {
     }
 
     private void initGame() {
-        // 清除所有格子
+        // 清除所有格子的状态
         for (int i = 0; i < currentRows; i++) {
             for (int j = 0; j < currentCols; j++) {
                 board[i][j].reset();
@@ -243,6 +236,24 @@ public class GamePanel extends JPanel {
 
         // 计算相邻地雷数
         calculateAdjacentMines();
+
+        // 强制刷新所有格子的显示
+        for (int i = 0; i < currentRows; i++) {
+            for (int j = 0; j < currentCols; j++) {
+                board[i][j].revalidate();
+                board[i][j].repaint();
+            }
+        }
+
+        // 刷新整个游戏面板
+        if (boardPanel != null) {
+            boardPanel.revalidate();
+            boardPanel.repaint();
+        }
+
+        // 刷新顶层容器
+        revalidate();
+        repaint();
     }
 
     private void placeMines() {
@@ -383,6 +394,9 @@ public class GamePanel extends JPanel {
                 flagsPlaced--;
                 updateMinesLabel();
             }
+            // 刷新这个格子的显示
+            tile.revalidate();
+            tile.repaint();
         }
     }
 
@@ -397,8 +411,37 @@ public class GamePanel extends JPanel {
     }
 
     public void resetGame() {
+        // 重置游戏状态
         resetGameState();
-        initGame();
+
+        // 重新初始化游戏（不清除面板）
+        for (int i = 0; i < currentRows; i++) {
+            for (int j = 0; j < currentCols; j++) {
+                board[i][j].reset();
+            }
+        }
+
+        // 重新放置地雷和计算数字
+        placeMines();
+        calculateAdjacentMines();
+
+        // 强制刷新所有格子
+        for (int i = 0; i < currentRows; i++) {
+            for (int j = 0; j < currentCols; j++) {
+                board[i][j].revalidate();
+                board[i][j].repaint();
+            }
+        }
+
+        // 刷新整个游戏面板
+        if (boardPanel != null) {
+            boardPanel.revalidate();
+            boardPanel.repaint();
+        }
+
+        // 刷新顶层容器
+        revalidate();
+        repaint();
     }
 
     private class TileClickListener implements ActionListener {
