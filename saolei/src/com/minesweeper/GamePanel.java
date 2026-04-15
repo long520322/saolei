@@ -32,8 +32,9 @@ public class GamePanel extends JPanel {
     private boolean shieldActive = false;
     private List<Skill> skills;
     private JButton safeRevealBtn, doubleClickBtn, mineSweeperBtn, shieldBtn;
-    private JButton modeBtn, easyBtn, mediumBtn, hardBtn;
-    private JPanel boardPanel;
+    private JButton modeBtn, easyBtn, mediumBtn, hardBtn, soundBtn;
+    private JPanel boardContainer;  // 游戏面板容器
+    private SoundService soundService;
 
     // 特效系统
     private java.util.List<Particle> particles;
@@ -124,6 +125,11 @@ public class GamePanel extends JPanel {
     public GamePanel() {
         setLayout(new BorderLayout());
         setBackground(new Color(30, 30, 35));
+
+        // 初始化音效
+        soundService = SoundService.getInstance();
+        soundService.preload();
+
         particles = new ArrayList<>();
         shockwaves = new ArrayList<>();
         chainExplosions = new ArrayList<>();
@@ -161,9 +167,77 @@ public class GamePanel extends JPanel {
         centerPanel.setBackground(new Color(30, 30, 35));
         centerPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
-        boardPanel = createBoardPanel();
-        centerPanel.add(boardPanel);
+        boardContainer = new JPanel(new GridBagLayout());
+        boardContainer.setBackground(new Color(30, 30, 35));
+        centerPanel.add(boardContainer);
         add(centerPanel, BorderLayout.CENTER);
+
+        createBoardPanel();
+    }
+
+    private void createBoardPanel() {
+        boardContainer.removeAll();
+        adjustTileSize();
+
+        JPanel boardPanel = new JPanel(new GridLayout(currentRows, currentCols, 2, 2));
+        boardPanel.setBackground(new Color(50, 50, 55));
+        boardPanel.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 65), 2));
+
+        board = new Tile[currentRows][currentCols];
+        for (int i = 0; i < currentRows; i++) {
+            for (int j = 0; j < currentCols; j++) {
+                board[i][j] = new Tile(i, j);
+                final int row = i, col = j;
+                board[i][j].addActionListener(e -> onTileClick(row, col));
+                board[i][j].addMouseListener(new MouseAdapter() {
+                    public void mouseClicked(MouseEvent e) {
+                        if (SwingUtilities.isRightMouseButton(e)) onTileRightClick(row, col);
+                    }
+                });
+                boardPanel.add(board[i][j]);
+            }
+        }
+
+        boardContainer.add(boardPanel);
+        boardContainer.revalidate();
+        boardContainer.repaint();
+    }
+
+    private void recreateBoardPanel() {
+        boardContainer.removeAll();
+        adjustTileSize();
+
+        JPanel boardPanel = new JPanel(new GridLayout(currentRows, currentCols, 2, 2));
+        boardPanel.setBackground(new Color(50, 50, 55));
+        boardPanel.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 65), 2));
+
+        board = new Tile[currentRows][currentCols];
+        for (int i = 0; i < currentRows; i++) {
+            for (int j = 0; j < currentCols; j++) {
+                board[i][j] = new Tile(i, j);
+                final int row = i, col = j;
+                board[i][j].addActionListener(e -> onTileClick(row, col));
+                board[i][j].addMouseListener(new MouseAdapter() {
+                    public void mouseClicked(MouseEvent e) {
+                        if (SwingUtilities.isRightMouseButton(e)) onTileRightClick(row, col);
+                    }
+                });
+                boardPanel.add(board[i][j]);
+            }
+        }
+
+        boardContainer.add(boardPanel);
+        boardContainer.revalidate();
+        boardContainer.repaint();
+
+        // 调整窗口大小
+        SwingUtilities.invokeLater(() -> {
+            Window w = SwingUtilities.getWindowAncestor(this);
+            if (w != null) {
+                w.pack();
+                w.setLocationRelativeTo(null);
+            }
+        });
     }
 
     private JPanel createTopPanel() {
@@ -210,18 +284,36 @@ public class GamePanel extends JPanel {
         minesLabel.setForeground(Color.BLACK);
 
         JButton resetBtn = createActionButton("新游戏", new Color(200, 220, 240));
-        resetBtn.addActionListener(e -> resetGame());
+        resetBtn.addActionListener(e -> {
+            soundService.playClick();
+            resetGame();
+        });
 
         JButton hintBtn = createActionButton("提 示", new Color(240, 220, 180));
-        hintBtn.addActionListener(e -> showHint());
+        hintBtn.addActionListener(e -> {
+            soundService.playClick();
+            showHint();
+        });
 
         modeBtn = createActionButton("人机对战", new Color(200, 220, 240));
-        modeBtn.addActionListener(e -> toggleGameMode());
+        modeBtn.addActionListener(e -> {
+            soundService.playClick();
+            toggleGameMode();
+        });
+
+        soundBtn = createActionButton("🔊 音效", new Color(200, 220, 240));
+        soundBtn.addActionListener(e -> {
+            boolean enabled = soundService.isEnabled();
+            soundService.setEnabled(!enabled);
+            soundBtn.setText(enabled ? "🔇 静音" : "🔊 音效");
+            if (!enabled) soundService.playClick();
+        });
 
         rightPanel.add(minesLabel);
         rightPanel.add(resetBtn);
         rightPanel.add(hintBtn);
         rightPanel.add(modeBtn);
+        rightPanel.add(soundBtn);
 
         panel.add(leftPanel, BorderLayout.WEST);
         panel.add(centerPanel, BorderLayout.CENTER);
@@ -238,7 +330,10 @@ public class GamePanel extends JPanel {
         btn.setFocusPainted(false);
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btn.setPreferredSize(new Dimension(60, 30));
-        btn.addActionListener(e -> setDifficulty(level));
+        btn.addActionListener(e -> {
+            soundService.playClick();
+            setDifficulty(level);
+        });
         return btn;
     }
 
@@ -283,7 +378,11 @@ public class GamePanel extends JPanel {
             case HARD: hardBtn.setBackground(new Color(200, 100, 100)); break;
         }
 
-        resetGame();
+        // 重新创建游戏板
+        recreateBoardPanel();
+
+        // 重置游戏数据
+        resetGameData();
     }
 
     private JPanel createSkillPanel() {
@@ -300,10 +399,22 @@ public class GamePanel extends JPanel {
         ));
         panel.setPreferredSize(new Dimension(150, 300));
 
-        safeRevealBtn = createSkillButton("安全探测", new Color(180, 230, 180), e -> useSafeReveal());
-        doubleClickBtn = createSkillButton("双倍点击", new Color(230, 230, 180), e -> useDoubleClick());
-        mineSweeperBtn = createSkillButton("雷区扫描", new Color(230, 180, 180), e -> useMineSweeper());
-        shieldBtn = createSkillButton("护 盾", new Color(180, 200, 230), e -> useShield());
+        safeRevealBtn = createSkillButton("安全探测", new Color(180, 230, 180), e -> {
+            soundService.playSkill();
+            useSafeReveal();
+        });
+        doubleClickBtn = createSkillButton("双倍点击", new Color(230, 230, 180), e -> {
+            soundService.playSkill();
+            useDoubleClick();
+        });
+        mineSweeperBtn = createSkillButton("雷区扫描", new Color(230, 180, 180), e -> {
+            soundService.playSkill();
+            useMineSweeper();
+        });
+        shieldBtn = createSkillButton("护 盾", new Color(180, 200, 230), e -> {
+            soundService.playSkill();
+            useShield();
+        });
 
         panel.add(Box.createVerticalStrut(15));
         panel.add(safeRevealBtn);
@@ -332,42 +443,35 @@ public class GamePanel extends JPanel {
         return btn;
     }
 
-    private JPanel createBoardPanel() {
-        adjustTileSize();
-        JPanel panel = new JPanel(new GridLayout(currentRows, currentCols, 2, 2));
-        panel.setBackground(new Color(50, 50, 55));
-        panel.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 65), 2));
-
-        board = new Tile[currentRows][currentCols];
-        for (int i = 0; i < currentRows; i++) {
-            for (int j = 0; j < currentCols; j++) {
-                board[i][j] = new Tile(i, j);
-                final int row = i, col = j;
-                board[i][j].addActionListener(e -> onTileClick(row, col));
-                board[i][j].addMouseListener(new MouseAdapter() {
-                    public void mouseClicked(MouseEvent e) {
-                        if (SwingUtilities.isRightMouseButton(e)) onTileRightClick(row, col);
-                    }
-                });
-                panel.add(board[i][j]);
-            }
-        }
-        return panel;
-    }
-
     private void adjustTileSize() {
         if (currentRows <= 9) tileSize = 48;
         else if (currentRows <= 16) tileSize = 40;
         else tileSize = 34;
     }
 
-    private void initGame() {
+    private void resetGameData() {
+        gameOver = false;
+        gameWin = false;
+        flagsPlaced = 0;
+        isComputerTurn = false;
+        shieldActive = false;
+
+        if (chainTimer != null) chainTimer.stop();
+        chainExplosions.clear();
+        particles.clear();
+        shockwaves.clear();
+
+        if (gameTimer != null) gameTimer.stop();
+        if (computerTimer != null) computerTimer.stop();
+
+        // 初始化游戏数据
         for (int i = 0; i < currentRows; i++) {
             for (int j = 0; j < currentCols; j++) {
                 board[i][j].reset();
             }
         }
 
+        // 放置地雷
         int minesPlaced = 0;
         while (minesPlaced < currentMines) {
             int row = random.nextInt(currentRows);
@@ -378,6 +482,7 @@ public class GamePanel extends JPanel {
             }
         }
 
+        // 计算相邻地雷数
         for (int i = 0; i < currentRows; i++) {
             for (int j = 0; j < currentCols; j++) {
                 if (!board[i][j].isMine()) {
@@ -396,37 +501,48 @@ public class GamePanel extends JPanel {
             }
         }
 
-        startTimer();
-        refreshBoard();
-    }
-
-    private void refreshBoard() {
-        for (int i = 0; i < currentRows; i++) {
-            for (int j = 0; j < currentCols; j++) {
-                board[i][j].repaint();
-            }
-        }
-        if (boardPanel != null) {
-            boardPanel.revalidate();
-            boardPanel.repaint();
-        }
-    }
-
-    private void startTimer() {
-        if (gameTimer != null) gameTimer.stop();
+        // 重启计时器
         elapsedSeconds = 0;
         gameTimer = new javax.swing.Timer(1000, e -> {
             elapsedSeconds++;
             timerLabel.setText(String.format("%02d:%02d", elapsedSeconds / 60, elapsedSeconds % 60));
         });
         gameTimer.start();
+
+        updateMinesLabel();
+
+        if (currentMode == GameMode.VS_COMPUTER) {
+            statusLabel.setText("🎮 人机对战 - 你的回合");
+        } else {
+            statusLabel.setText("🎮 游戏中");
+        }
+        statusLabel.setForeground(Color.BLACK);
+
+        refreshBoard();
+    }
+
+    private void refreshBoard() {
+        if (board == null) return;
+        for (int i = 0; i < currentRows; i++) {
+            for (int j = 0; j < currentCols; j++) {
+                if (board[i][j] != null) {
+                    board[i][j].repaint();
+                }
+            }
+        }
+        if (boardContainer != null) {
+            boardContainer.revalidate();
+            boardContainer.repaint();
+        }
+    }
+
+    private void initGame() {
+        resetGameData();
     }
 
     // 单个地雷爆炸特效
     private void createSingleExplosion(int row, int col) {
         Tile tile = board[row][col];
-
-        // 触发炸弹爆炸动画
         tile.startExplode();
 
         Point location = tile.getLocationOnScreen();
@@ -435,17 +551,14 @@ public class GamePanel extends JPanel {
         int centerX = location.x + tile.getWidth() / 2 - panelLocation.x;
         int centerY = location.y + tile.getHeight() / 2 - panelLocation.y;
 
-        // 添加冲击波
         shockwaves.add(new Shockwave(centerX, centerY));
 
-        // 爆炸粒子
         for (int i = 0; i < 60; i++) {
             particles.add(new Particle(centerX, centerY, new Color(255, 80 + random.nextInt(80), 30), false));
             particles.add(new Particle(centerX, centerY, new Color(255, 200 + random.nextInt(55), 30), true));
             particles.add(new Particle(centerX, centerY, new Color(80 + random.nextInt(40), 60 + random.nextInt(30), 40), false));
         }
 
-        // 屏幕震动
         Component parent = getParent();
         Point originalPos = parent.getLocation();
         javax.swing.Timer shakeTimer = new javax.swing.Timer(16, new ActionListener() {
@@ -482,13 +595,14 @@ public class GamePanel extends JPanel {
         currentChainIndex = 0;
 
         if (chainTimer != null) chainTimer.stop();
-        chainTimer = new javax.swing.Timer(200, new ActionListener() {
+        chainTimer = new javax.swing.Timer(150, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 if (currentChainIndex < chainExplosions.size()) {
                     Point p = chainExplosions.get(currentChainIndex);
                     board[p.x][p.y].reveal();
                     createSingleExplosion(p.x, p.y);
+                    soundService.playExplode();
                     currentChainIndex++;
 
                     if (currentChainIndex % 3 == 0) {
@@ -516,6 +630,7 @@ public class GamePanel extends JPanel {
                     statusLabel.setText("💀 游戏结束");
                     statusLabel.setForeground(Color.RED);
                     refreshBoard();
+                    soundService.playGameOver();
                 }
             }
         });
@@ -550,6 +665,8 @@ public class GamePanel extends JPanel {
         if (tile.isFlagged() || tile.isRevealed()) return;
 
         if (tile.isMine()) {
+            soundService.playExplode();
+
             if (shieldActive) {
                 shieldActive = false;
                 statusLabel.setText("🛡️ 护盾生效！");
@@ -574,11 +691,12 @@ public class GamePanel extends JPanel {
             return;
         }
 
+        soundService.playClick();
+
         revealTile(row, col);
         refreshBoard();
         checkWin();
 
-        // 人机对战：玩家点击后切换到电脑回合
         if (currentMode == GameMode.VS_COMPUTER && !gameOver && !gameWin) {
             isComputerTurn = true;
             statusLabel.setText("🤖 电脑思考中...");
@@ -628,6 +746,8 @@ public class GamePanel extends JPanel {
         statusLabel.setForeground(new Color(0, 100, 0));
         if (gameTimer != null) gameTimer.stop();
 
+        soundService.playWin();
+
         for (int i = 0; i < 150; i++) {
             int row = random.nextInt(currentRows);
             int col = random.nextInt(currentCols);
@@ -659,19 +779,21 @@ public class GamePanel extends JPanel {
         if (!tile.isFlagged() && flagsPlaced < currentMines) {
             tile.setFlagged(true);
             flagsPlaced++;
+            soundService.playFlag();
         } else if (tile.isFlagged()) {
             tile.setFlagged(false);
             flagsPlaced--;
+            soundService.playFlag();
         }
         tile.repaint();
         updateMinesLabel();
     }
 
-    // 修复后的电脑回合方法
     private void startComputerTurn() {
         if (gameOver || gameWin || !isComputerTurn) return;
 
-        // 延迟执行，让玩家看到状态变化
+        soundService.playComputer();
+
         computerTimer = new javax.swing.Timer(600, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -680,7 +802,6 @@ public class GamePanel extends JPanel {
                     return;
                 }
 
-                // 收集所有安全格子
                 List<Point> safe = new ArrayList<>();
                 for (int i = 0; i < currentRows; i++) {
                     for (int j = 0; j < currentCols; j++) {
@@ -692,22 +813,19 @@ public class GamePanel extends JPanel {
                 }
 
                 if (!safe.isEmpty()) {
-                    // 随机选择一个安全格子
                     Point p = safe.get(random.nextInt(safe.size()));
                     Tile tile = board[p.x][p.y];
                     Color originalBg = tile.getBackground();
 
-                    // 高亮显示电脑要点击的格子
                     tile.setBackground(new Color(100, 200, 255));
                     tile.repaint();
 
-                    // 延迟执行点击，让玩家看到高亮
                     javax.swing.Timer clickTimer = new javax.swing.Timer(400, new ActionListener() {
                         @Override
                         public void actionPerformed(ActionEvent evt) {
                             if (!gameOver && !gameWin && isComputerTurn) {
-                                // 执行电脑点击
                                 if (board[p.x][p.y].isMine()) {
+                                    soundService.playExplode();
                                     createSingleExplosion(p.x, p.y);
                                     gameOver = true;
                                     statusLabel.setText("💀 电脑踩到地雷！你赢了！");
@@ -715,18 +833,18 @@ public class GamePanel extends JPanel {
                                     if (gameTimer != null) gameTimer.stop();
                                     revealAllMines();
                                     refreshBoard();
+                                    soundService.playGameOver();
                                 } else {
+                                    soundService.playClick();
                                     revealTile(p.x, p.y);
                                     refreshBoard();
                                     checkWin();
                                 }
                             }
-                            // 恢复格子颜色
                             if (!tile.isRevealed()) {
                                 tile.setBackground(originalBg);
                                 tile.repaint();
                             }
-                            // 结束电脑回合
                             isComputerTurn = false;
                             if (!gameOver && !gameWin) {
                                 statusLabel.setText("🎮 轮到你了");
@@ -738,7 +856,6 @@ public class GamePanel extends JPanel {
                     clickTimer.setRepeats(false);
                     clickTimer.start();
                 } else {
-                    // 没有安全格子，结束电脑回合
                     isComputerTurn = false;
                     if (!gameOver && !gameWin) {
                         statusLabel.setText("🎮 轮到你了");
@@ -907,34 +1024,8 @@ public class GamePanel extends JPanel {
     }
 
     private void resetGame() {
-        gameOver = false;
-        gameWin = false;
-        flagsPlaced = 0;
-        isComputerTurn = false;
-        shieldActive = false;
-
-        if (chainTimer != null) chainTimer.stop();
-        chainExplosions.clear();
-
-        particles.clear();
-        shockwaves.clear();
-
-        if (gameTimer != null) gameTimer.stop();
-        if (computerTimer != null) computerTimer.stop();
-
-        initGame();
+        resetGameData();
         refreshBoard();
-
-        if (currentMode == GameMode.VS_COMPUTER) {
-            statusLabel.setText("🎮 人机对战 - 你的回合");
-        } else {
-            statusLabel.setText("🎮 游戏中");
-        }
-        statusLabel.setForeground(Color.BLACK);
-        updateMinesLabel();
-
-        revalidate();
-        repaint();
 
         SwingUtilities.invokeLater(() -> {
             Window w = SwingUtilities.getWindowAncestor(this);
